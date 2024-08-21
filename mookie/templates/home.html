@@ -1,0 +1,41 @@
+{% extends 'base.html' %}
+
+{% block content %}
+
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Face Detection</title>
+  </head>
+  <body>
+    <h1>MOOKIE</h1>
+    <button id="startButton">Start</button>
+    <button id="stopButton">Stop</button>
+    <img id="video" width="640" height="480" />
+
+    <script>
+      let video = document.getElementById("video");
+      let startButton = document.getElementById("startButton");
+      let stopButton = document.getElementById("stopButton");
+      let isStreaming = false;
+
+      startButton.addEventListener("click", () => {
+        if (!isStreaming) {
+          video.src = "/video_feed/";
+          isStreaming = true;
+        }
+      });
+
+      stopButton.addEventListener("click", () => {
+        if (isStreaming) {
+          video.src = "";
+          isStreaming = false;
+        }
+      });
+    </script>
+  </body>
+</html>
+
+{% endblock %}
