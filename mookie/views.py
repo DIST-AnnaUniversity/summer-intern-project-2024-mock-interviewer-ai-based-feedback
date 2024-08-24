@@ -6,10 +6,29 @@ from django.shortcuts import render, redirect
 from django.contrib import messages
 from .models import Resume
 from PyPDF2 import PdfReader
+from .forms import ResumeUploadForm
+
+from django.shortcuts import render, redirect
+from django.contrib import messages
+from .models import Resume
+from .forms import ResumeUploadForm
+from PyPDF2 import PdfReader
+
 
 def upload_resume(request):
+    if not request.user.is_authenticated:
+        messages.error(request, 'You need to be logged in to upload a resume.')
+        return redirect('home')
+    
+    try:
+        resume = Resume.objects.get(user=request.user)  # Get the existing resume if it exists
+        has_uploaded = True
+    except Resume.DoesNotExist:
+        resume = None
+        has_uploaded = False
+
     if request.method == 'POST':
-        form = ResumeUploadForm(request.POST, request.FILES)
+        form = ResumeUploadForm(request.POST, request.FILES, instance=resume)
         if form.is_valid():
             resume = form.save(commit=False)
             resume.user = request.user
@@ -20,13 +39,13 @@ def upload_resume(request):
             for page in reader.pages:
                 text += page.extract_text()
             resume.extracted_text = text
-
-            resume.save()
-            return redirect('success_url')  # Redirect to a success page or profile view
+            resume.custom_save()
+            messages.success(request, 'Your resume was uploaded successfully!')
+            return redirect('home')  # Redirect to a success page or profile view
     else:
-        form = ResumeUploadForm()
+        form = ResumeUploadForm(instance=resume)
 
-    return render(request, 'upload_resume.html', {'form': form})
+    return render(request, 'upload_resume.html', {'form': form, 'has_uploaded': has_uploaded})
 
 def home(request):
     if request.method ==  'POST':

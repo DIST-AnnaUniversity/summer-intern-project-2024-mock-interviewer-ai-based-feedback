@@ -40,7 +40,6 @@
        <h1>Login</h1>
        <form method="POST" action="{% url 'home' %}"> 
             {% csrf_token %}
-            <form>
               <div class="mb-3">
                 
                 <input type="text" class="form-control" aria-describedby="emailHelp" name="username", placeholder="Username">
@@ -51,7 +50,7 @@
                 <input type="password" class="form-control" name="password" , placeholder="Password" >
               </div>
               <button type="submit" class="btn btn-secondary">Login</button>
-            </form>
+            
           </form>
        </div>
   {% endif %}

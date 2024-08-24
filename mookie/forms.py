@@ -7,3 +7,5 @@ class ResumeUploadForm(forms.ModelForm):
     class Meta:
         model = Resume
         fields = ['resume_file']
+    
+    
