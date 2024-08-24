@@ -10,7 +10,7 @@
     <title>Face Detection</title>
   </head>
   <body>
-    <h1>MOOKIE</h1>
+    {% if user.is_authenticated %}
     <button id="startButton">Start</button>
     <button id="stopButton">Stop</button>
     <img id="video" width="640" height="480" />
@@ -35,6 +35,26 @@
         }
       });
     </script>
+  {% else %}
+       <div class="col-md-6 offset-md-3">
+       <h1>Login</h1>
+       <form method="POST" action="{% url 'home' %}"> 
+            {% csrf_token %}
+            <form>
+              <div class="mb-3">
+                
+                <input type="text" class="form-control" aria-describedby="emailHelp" name="username", placeholder="Username">
+                
+              </div>
+              <div class="mb-3">
+                
+                <input type="password" class="form-control" name="password" , placeholder="Password" >
+              </div>
+              <button type="submit" class="btn btn-secondary">Login</button>
+            </form>
+          </form>
+       </div>
+  {% endif %}
   </body>
 </html>
 
