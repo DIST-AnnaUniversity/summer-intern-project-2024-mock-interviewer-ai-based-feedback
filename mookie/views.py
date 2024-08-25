@@ -8,12 +8,6 @@ from .models import Resume
 from PyPDF2 import PdfReader
 from .forms import ResumeUploadForm
 
-from django.shortcuts import render, redirect
-from django.contrib import messages
-from .models import Resume
-from .forms import ResumeUploadForm
-from PyPDF2 import PdfReader
-
 
 def upload_resume(request):
     if not request.user.is_authenticated:
