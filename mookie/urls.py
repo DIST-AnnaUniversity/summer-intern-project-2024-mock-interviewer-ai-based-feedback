@@ -7,5 +7,4 @@ urlpatterns = [
     path('', views.home, name='home'),
     path('video_feed/', views.video_feed, name='video_feed'),
     path('upload/', views.upload_resume, name='upload_resume'),
-    
 ]

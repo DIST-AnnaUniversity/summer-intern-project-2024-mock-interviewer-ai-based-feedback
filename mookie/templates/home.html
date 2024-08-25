@@ -1,60 +1,89 @@
 {% extends 'base.html' %}
 
 {% block content %}
-
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Face Detection</title>
-  </head>
-  <body>
-    {% if user.is_authenticated %}
-    <button id="startButton">Start</button>
-    <button id="stopButton">Stop</button>
-    <img id="video" width="640" height="480" />
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Face Detection</title>
+</head>
+<body>
+  {% if user.is_authenticated %}
 
-    <script>
-      let video = document.getElementById("video");
-      let startButton = document.getElementById("startButton");
-      let stopButton = document.getElementById("stopButton");
-      let isStreaming = false;
+  <div>
+    <h2>Generated Interview Questions</h2>
+    {% if questions %}
+      <p id="currentQuestion"></p>
+      <button id="nextButton">Next</button>
+    {% else %}
+      <p>No questions generated yet.</p>
+    {% endif %}
+  </div>
+  
+  <button id="startButton">Start</button>
+  <button id="stopButton">Stop</button>
+  <img id="video" width="640" height="480" />
 
-      startButton.addEventListener("click", () => {
-        if (!isStreaming) {
-          video.src = "/video_feed/";
-          isStreaming = true;
-        }
-      });
+  <script>
+    let video = document.getElementById("video");
+    let startButton = document.getElementById("startButton");
+    let stopButton = document.getElementById("stopButton");
+    let isStreaming = false;
 
-      stopButton.addEventListener("click", () => {
-        if (isStreaming) {
-          video.src = "";
-          isStreaming = false;
-        }
-      });
-    </script>
+    startButton.addEventListener("click", () => {
+      if (!isStreaming) {
+        video.src = "/video_feed/";
+        isStreaming = true;
+      }
+    });
+
+    stopButton.addEventListener("click", () => {
+      if (isStreaming) {
+        video.src = "";
+        isStreaming = false;
+      }
+    });
+
+    // Properly inject the list of questions from Django
+    let questions = {{ questions|safe }};
+    console.log("questions from home:", questions);
+    let currentIndex = 0;
+    let currentQuestionElement = document.getElementById("currentQuestion");
+    let nextButton = document.getElementById("nextButton");
+
+    // Display the first question initially
+    if (questions.length > 0) {
+      currentQuestionElement.innerText = questions[currentIndex];
+    }
+
+    // Add event listener to the Next button
+    nextButton.addEventListener("click", () => {
+      currentIndex++;
+      if (currentIndex < questions.length) {
+        currentQuestionElement.innerText = questions[currentIndex];
+      } else {
+        currentQuestionElement.innerText = "No more questions.";
+        nextButton.disabled = true;
+      }
+    });
+  </script>
+
   {% else %}
-       <div class="col-md-6 offset-md-3">
-       <h1>Login</h1>
-       <form method="POST" action="{% url 'home' %}"> 
-            {% csrf_token %}
-              <div class="mb-3">
-                
-                <input type="text" class="form-control" aria-describedby="emailHelp" name="username", placeholder="Username">
-                
-              </div>
-              <div class="mb-3">
-                
-                <input type="password" class="form-control" name="password" , placeholder="Password" >
-              </div>
-              <button type="submit" class="btn btn-secondary">Login</button>
-            
-          </form>
-       </div>
+  <div class="col-md-6 offset-md-3">
+    <h1>Login</h1>
+    <form method="POST" action="{% url 'home' %}">
+      {% csrf_token %}
+      <div class="mb-3">
+        <input type="text" class="form-control" aria-describedby="emailHelp" name="username" placeholder="Username">
+      </div>
+      <div class="mb-3">
+        <input type="password" class="form-control" name="password" placeholder="Password">
+      </div>
+      <button type="submit" class="btn btn-secondary">Login</button>
+    </form>
+  </div>
   {% endif %}
-  </body>
+</body>
 </html>
-
 {% endblock %}
