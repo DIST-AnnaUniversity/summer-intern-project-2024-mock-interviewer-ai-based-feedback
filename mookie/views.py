@@ -11,6 +11,7 @@ from langchain_huggingface import HuggingFaceEndpoint
 from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
 import os
+import requests
 
 def upload_resume(request):
     if not request.user.is_authenticated:
@@ -55,11 +56,16 @@ def home(request):
         if user is not None:
             login(request, user)
             messages.success(request, "Logged In")
+           
+            try:
+                # Generate questions after login
+                questions = generate_questions(user)
+            except Resume.DoesNotExist:
+                messages.error(request, "No resume found for this user.")
+            except Exception as e:
+                messages.error(request, f"An error occurred: {str(e)}")  # Use 'questions' to match the template
             
-            # Generate questions after login
-            questions = generate_questions()
-            return render(request, 'home.html', {'questions': questions})  # Use 'questions' to match the template
-        
+            return render(request, 'home.html', {'questions': questions})
         else: 
             messages.error(request, "Error logging in")
             return redirect('home')
@@ -102,62 +108,73 @@ def video_feed(request):
     return StreamingHttpResponse(face_detection(), content_type='multipart/x-mixed-replace; boundary=frame')
 
 
-def generate_questions():
+import requests
+
+def summarize_content(content):
+    api_url = "https://api-inference.huggingface.co/models/facebook/bart-large-cnn"
+    headers = {"Authorization": f"Bearer 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"}
+    
+    # Directly use the content to summarize, without including the prompt in the request
+    payload = {"inputs": content}
+    
+    response = requests.post(api_url, headers=headers, json=payload)
+    summary = response.json()
+    
+    # Extract the summarized text
+    summarized_text = summary[0]['summary_text'] if 'summary_text' in summary[0] else "Summary could not be generated."
+    print("summary", summarized_text)
+    
+    return summarized_text
+
+
+
+
+def generate_questions(user):
     os.environ["HF_TOKEN"] = "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"  
 
-    repo_id = "mistralai/Mistral-7B-Instruct-v0.3"
-    llm = HuggingFaceEndpoint(repo_id=repo_id, max_length=128, temperature=0.7, token=os.environ["HF_TOKEN"])
+    try:
+        # Retrieve the resume from the database
+        resume = Resume.objects.get(user=user)
+        resume_content = resume.extracted_text
 
-    resume_content = """
-    Name: Abharna Shree M
-    Education:
-    - College of Engineering, Guindy, Chennai: B.Tech Information Technology (CGPA: 8.62, first three semesters)
-    - Anna Adarsh Matriculation Higher Secondary School, Chennai: HSC (97.66%)
-    - Anna Adarsh Matriculation Higher Secondary School, Chennai: SSLC (97.60%)
+        if not resume_content:
+            raise ValueError("No resume content found for the user.")
 
-    Projects:
-    - CUIC Web Portal: Designed frontend using React.js, Tailwind CSS, integrated with backend API (Node.js, Express, MongoDB)
-    - Railway Rooster: Designed frontend, implemented employee shift management, PostgreSQL for data storage, shift swap features
-    - Expense Tracker: Implemented CRUD operations, used Express.js, PostgreSQL, deployed on Render
-    - Culinary Connect: Implemented UI/UX for online food ordering website using HTML, CSS, JS, MySQL, PHP
+        # Summarize the resume content
+        summarized_content = summarize_content(resume_content)
 
-    Technical Skills:
-    - Languages: PHP, Python, C, C++, JavaScript
-    - Tools, Frameworks, and Libraries: Node.js, Express, React.js, Tailwind CSS, Git
-    - Database Management: PostgreSQL, MySQL
+        # Set up your model
+        repo_id = "mistralai/Mistral-7B-Instruct-v0.3"
+        llm = HuggingFaceEndpoint(repo_id=repo_id, max_length=128, temperature=0.7, token=os.environ["HF_TOKEN"])
 
-    Achievements:
-    - Arduino programming for Padvending Technology project, winner at Technovation - Kurukshetra '24
-    - Track Prize in Fintech Domain, CodHer '24, 24-hour Women-only hackathon by ACM-CEG
-    - Winner of Webtrix (Website Frontend Contest) at i++ '23, intra-college symposium
-    - School Topper in HSLC and SSLC examinations
+        # Construct the prompt using the summarized content
+        prompt = f"""
+        Based on the following summarized resume content:
 
-    Experience:
-    - Industrial Relations and Media Coordinator at CEG Tech Forum
-    - Associate Head of Web and Apps at Computer Society of Anna University
-    - Participated in 5+ hackathons, shortlisted in Smart India Hackathon 2023
-    - Member of Anna University School of CsEng ACM Student Chapter
-    - Interviewer, Content Writer, Photographer at Guindy Times
-    """
+        {summarized_content}
 
-    prompt = f"""
-    Based on the following resume content:
+        Generate four interview questions that can be asked to the candidate, along with the expected answers based on the candidate's field of knowledge and experience.
+        """
 
-    {resume_content}
+        # Create a prompt template and chain for your LLM
+        llm_chain = LLMChain(llm=llm, prompt=PromptTemplate(template=prompt, input_variables=[]))
+        
+        # Generate questions
+        response = llm_chain.invoke({})
+        questions_text = response["text"]  
 
-    Generate four interview questions that can be asked to the candidate, along with the expected answers based on the candidate's field of knowledge and experience.
-    """
+        # Process the response to extract questions
+        questions_and_answers = questions_text.strip().split("\n\n")
+        questions = [qa.split("Expected Answer:")[0].strip() for qa in questions_and_answers]
+        
+        # Filter out any empty strings from the list
+        questions = [q for q in questions if q.strip()]
 
-    llm_chain = LLMChain(llm=llm, prompt=PromptTemplate(template=prompt, input_variables=[]))
+        print(questions)
+
+        return questions
     
-    response = llm_chain.invoke({})
-    questions_text = response["text"]  
-
-    questions_and_answers = questions_text.strip().split("\n\n")
-    questions = [qa.split("Expected Answer:")[0].strip() for qa in questions_and_answers]
-
-    questions = [q for q in questions if q.strip()]
-
-    print(questions)
-
-    return questions
+    except Resume.DoesNotExist:
+        raise Resume.DoesNotExist("No resume found for this user.")
+    except Exception as e:
+        raise Exception(f"An error occurred during question generation: {str(e)}")
