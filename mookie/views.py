@@ -18,6 +18,11 @@ import time
 from django.views.decorators.csrf import csrf_exempt
 import json
 import re
+#import wave
+import subprocess
+#import parselmouth
+#from parselmouth.praat import call
+#import io
 
 @csrf_exempt
 def update_question_index(request):
@@ -237,12 +242,40 @@ def generate_questions(user):
     except Exception as e:
         raise Exception(f"An error occurred during question generation: {str(e)}")
 
+def check_grammar(text):
+    url = "https://api.languagetoolplus.com/v2/check"
+    data = {
+        'text': text,
+        'language': 'en-US',
+    }
+    response = requests.post(url, data=data)
+    result = response.json()
+
+    # Extract grammar issues from the response
+    matches = result.get('matches', [])
+    grammar_issues = []
+    
+    for match in matches:
+        issue = {
+            'message': match['message'],
+            'context': match['context']['text'],
+            'suggestions': [s['value'] for s in match.get('replacements', [])]
+        }
+        grammar_issues.append(issue)
+
+        print(grammar_issues)
+    
+    return grammar_issues
+
+
+
 
 def interview_process(request):
     user_answer = recognize_speech()
 
     if not user_answer:
         return JsonResponse({'error': 'No speech detected or error in recognition'}, status=400)
+    
     
     current_question_index = request.session.get('current_question_index', 0)
     answers = request.session.get('answers', [])
@@ -256,7 +289,12 @@ def interview_process(request):
     expected_answer = answers[current_question_index]
 
     percentage = get_similarity(user_answer, expected_answer)
+    grammar_issues = check_grammar(user_answer)
 
     request.session['best_match_percentage'] = percentage
+    request.session['grammar_issues'] = grammar_issues
 
-    return JsonResponse({'percentage': percentage})
+    return JsonResponse({
+        'percentage': percentage,
+        'grammar_issues': grammar_issues
+    })

@@ -23,12 +23,14 @@
   <button id="startButton">Start</button>
   <button id="stopButton">Stop</button>
   <button id="showAnalysisButton">Show Analysis</button>
-  <p id="analysisResult"></p>
-  <img id="video" width="640" height="480" />
-
-  <div id="analysisResult" style="display: none;"> <!-- Hidden by default -->
+  <div id="analysisResult" style="display: none;">
     <p>Best Match Percentage: <span id="percentageValue"></span></p>
+    <div id="grammarIssues" style="display: none; max-height: 200px; overflow-y: auto;">
+        <h4>Grammar Issues:</h4>
+        <!-- Grammar issues will be displayed here -->
+    </div>
   </div>
+  <img id="video" width="640" height="480" />
 
   <script>
     let video = document.getElementById("video");
@@ -64,8 +66,10 @@
               alert(data.error);
             } else {
               console.log("Speech recognition result:", data.percentage);
+              console.log("Grammar issues:", data.grammar_issues);
               // Store the percentage for later use
               localStorage.setItem('bestMatchPercentage', data.percentage);
+              localStorage.setItem('grammarIssues', JSON.stringify(data.grammar_issues));
             }
           });
         isListening = true;
@@ -103,12 +107,22 @@
 
     showAnalysisButton.addEventListener("click", () => {
       const percentage = localStorage.getItem('bestMatchPercentage');
+      const grammarIssues = JSON.parse(localStorage.getItem('grammarIssues'));
       if (percentage) {
-          alert(`Best Match Percentage: ${percentage}%`);
-          percentageValueElement.innerText = `${percentage}%`;
-          analysisResultElement.style.display = 'block';
+        percentageValueElement.innerText = `${percentage}%`;
+        analysisResultElement.style.display = 'block';
+        const grammarIssuesElement = document.getElementById('grammarIssues');
+        if (grammarIssues && grammarIssues.length > 0) {
+          grammarIssuesElement.innerHTML = '<ul>' + grammarIssues.map(issue =>
+              `<li><strong>${issue.message}</strong> (Context: ${issue.context}) - Suggestions: ${issue.suggestions.join(', ')}</li>`
+          ).join('') + '</ul>';
+          grammarIssuesElement.style.display = 'block';
+        } else {
+          grammarIssuesElement.innerHTML = '<p>No grammar issues found.</p>';
+        }
       } else {
-          alert("No analysis result found.");
+        percentageValueElement.innerText = "No analysis result found.";
+        analysisResultElement.style.display = 'block';
       }
     });
 
