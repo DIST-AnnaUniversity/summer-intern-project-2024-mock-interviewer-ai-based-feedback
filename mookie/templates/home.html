@@ -22,32 +22,27 @@
   
   <button id="startButton">Start</button>
   <button id="stopButton">Stop</button>
+  <button id="showAnalysisButton">Show Analysis</button>
+  <p id="analysisResult"></p>
   <img id="video" width="640" height="480" />
+
+  <div id="analysisResult" style="display: none;"> <!-- Hidden by default -->
+    <p>Best Match Percentage: <span id="percentageValue"></span></p>
+  </div>
 
   <script>
     let video = document.getElementById("video");
     let startButton = document.getElementById("startButton");
     let stopButton = document.getElementById("stopButton");
+    let showAnalysisButton = document.getElementById("showAnalysisButton");
+    let analysisResultElement = document.getElementById('analysisResult');
+    let percentageValueElement = document.getElementById('percentageValue');
     let isStreaming = false;
+    let isListening = false;
 
-    startButton.addEventListener("click", () => {
-      if (!isStreaming) {
-        video.src = "/video_feed/";
-        isStreaming = true;
-      }
-    });
-
-    stopButton.addEventListener("click", () => {
-      if (isStreaming) {
-        video.src = "";
-        isStreaming = false;
-      }
-    });
-
-    // Properly inject the list of questions from Django
-    let questions = {{ questions|safe }};
-    console.log("questions from home:", questions);
+    // Initialize the index to track the current question
     let currentIndex = 0;
+    let questions = {{ questions|safe }};
     let currentQuestionElement = document.getElementById("currentQuestion");
     let nextButton = document.getElementById("nextButton");
 
@@ -56,16 +51,67 @@
       currentQuestionElement.innerText = questions[currentIndex];
     }
 
-    // Add event listener to the Next button
+    startButton.addEventListener("click", () => {
+      if (!isStreaming) {
+        video.src = "/video_feed/";
+        isStreaming = true;
+      }
+      if(!isListening){
+        fetch('/interview_process/')
+          .then(response => response.json())
+          .then(data => {
+            if (data.error) {
+              alert(data.error);
+            } else {
+              console.log("Speech recognition result:", data.percentage);
+              // Store the percentage for later use
+              localStorage.setItem('bestMatchPercentage', data.percentage);
+            }
+          });
+        isListening = true;
+      }
+    });
+
     nextButton.addEventListener("click", () => {
-      currentIndex++;
-      if (currentIndex < questions.length) {
+      if (currentIndex < questions.length - 1) {
+        currentIndex++;
         currentQuestionElement.innerText = questions[currentIndex];
+        // Update the current question index in the session
+        fetch('/update_question_index/', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token }}'
+          },
+          body: JSON.stringify({ index: currentIndex })
+        });
       } else {
         currentQuestionElement.innerText = "No more questions.";
         nextButton.disabled = true;
       }
     });
+
+    stopButton.addEventListener("click", () => {
+      if (isStreaming) {
+        video.src = "";
+        isStreaming = false;
+      }
+      if(isListening){
+        isListening = false;
+      }
+    });
+
+    showAnalysisButton.addEventListener("click", () => {
+      const percentage = localStorage.getItem('bestMatchPercentage');
+      if (percentage) {
+          alert(`Best Match Percentage: ${percentage}%`);
+          percentageValueElement.innerText = `${percentage}%`;
+          analysisResultElement.style.display = 'block';
+      } else {
+          alert("No analysis result found.");
+      }
+    });
+
   </script>
 
   {% else %}
