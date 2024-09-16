@@ -27,6 +27,8 @@
     <p>Best Match Percentage: <span id="percentageValue"></span></p>
     <p>Eye Movement: <span id="eyeMovementValue"></span></p>
     <p>Most Common Emotion: <span id="emotionValue"></span></p>
+    <p>Emotion Feedback: <span id="emotionFeedback"></span></p>
+    <p>Eye Movement Feedback: <span id="eyeMovementFeedback"></span></p>
   </div>
   <img id="video" width="640" height="480" />
 
@@ -68,6 +70,24 @@
               localStorage.setItem('bestMatchPercentage', data.percentage);
             }
           });
+
+        fetch('/video_results/')
+          .then(response => response.json())
+          .then(data => {
+            if (data.error) {
+              alert(data.error);
+            } else {
+              console.log("Eye Movement:", data.eye_moved);
+              console.log("Most Common Emotion:", data.most_common_emotion);
+
+          // Store the eye movement and emotion data in localStorage
+              localStorage.setItem('eyeMoved', data.eye_moved);
+              localStorage.setItem('mostCommonEmotion', data.most_common_emotion);
+            }
+          })
+          .catch(error => {
+            console.error('Error fetching video results:', error);
+         });
         isListening = true;
       }
     });
@@ -101,25 +121,74 @@
       }
     });
 
-    showAnalysisButton.addEventListener("click", () => {
-      const percentage = localStorage.getItem('bestMatchPercentage');
-      if (percentage) {
-        percentageValueElement.innerText = `${percentage}%`;
-        analysisResultElement.style.display = 'block';
-      } else {
-        percentageValueElement.innerText = "No analysis result found.";
-        analysisResultElement.style.display = 'block';
-      }
-      fetch('/video_results/')  
-      .then(response => response.json())
-      .then(data => {
-        document.getElementById('eyeMovementValue').innerText = data.eye_moved;
-        document.getElementById('emotionValue').innerText = data.most_common_emotion;
-      })
-      .catch(error => {
-        console.error('Error fetching video results:', error);
-      });
-    });
+  showAnalysisButton.addEventListener("click", () => {
+    // Retrieve stored values from localStorage
+    const percentage = localStorage.getItem('bestMatchPercentage');
+    const eyeMoved = localStorage.getItem('eyeMoved');
+    const mostCommonEmotion = localStorage.getItem('mostCommonEmotion');
+
+    // Display the percentage match result
+    if (percentage) {
+      percentageValueElement.innerText = `${percentage}%`;
+    } else {
+      percentageValueElement.innerText = "No analysis result found.";
+    }
+
+    // Display the eye movement and emotion results
+    if (eyeMoved) {
+      document.getElementById('eyeMovementValue').innerText = eyeMoved;
+    } else {
+      document.getElementById('eyeMovementValue').innerText = "No data";
+    }
+
+    if (mostCommonEmotion) {
+      document.getElementById('emotionValue').innerText = mostCommonEmotion;
+    } else {
+      document.getElementById('emotionValue').innerText = "No data";
+    }
+
+    // Show the analysis result section
+    analysisResultElement.style.display = 'block';
+
+    // Provide feedback based on the emotion and eye movement
+    let emotionFeedback = '';
+    switch (mostCommonEmotion) {
+      case 'happy':
+        emotionFeedback = "You appeared confident and positive throughout the interview.";
+        break;
+      case 'surprise':
+        emotionFeedback = "You showed some surprise, which might indicate unexpected aspects.";
+        break;
+      case 'sad':
+        emotionFeedback = "You might have felt uneasy. Reflect on these moments for future interviews.";
+        break;
+      case 'angry':
+        emotionFeedback = "Try to identify any frustration and manage such emotions calmly.";
+        break;
+      case 'fear':
+        emotionFeedback = "Feeling anxious is natural. Consider practicing relaxation techniques.";
+        break;
+      case 'neutral':
+        emotionFeedback = "A neutral demeanor often shows calmness and focus.";
+        break;
+      case 'disgust':
+        emotionFeedback = "Stay calm and positive during the interview.";
+        break;
+      default:
+        emotionFeedback = "Emotion not recognized. Ensure the data is processed correctly.";
+    }
+    document.getElementById('emotionFeedback').innerText = emotionFeedback;
+
+    let eyeMovementFeedback = '';
+    if (parseInt(eyeMoved) > 10) {
+      eyeMovementFeedback = "Frequent eye movement detected. Try to stay more focused.";
+    } else if (parseInt(eyeMoved) > 5) {
+      eyeMovementFeedback = "Moderate eye movement is normal.";
+    } else {
+      eyeMovementFeedback = "Minimal eye movement, showing good focus.";
+    }
+    document.getElementById('eyeMovementFeedback').innerText = eyeMovementFeedback;
+  });
 
   </script>
 

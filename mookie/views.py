@@ -130,7 +130,7 @@ def face_detection():
         if result:
             ep=result[0]['emotions']
             maxe=max(ep, key=ep.get)
-            print(f"Emotion detected: {maxe}")
+            #print(f"Emotion detected: {maxe}")
             emotions.append(maxe)
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
 
