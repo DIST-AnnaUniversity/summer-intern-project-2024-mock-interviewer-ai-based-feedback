@@ -1,0 +1,21 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interview Questions Scraper</title>
+</head>
+<body>
+    <h1>Scrape Interview Questions</h1>
+    <form action="{% url 'scrape_questions' %}" method="post">
+        {% csrf_token %}
+        <label for="topic">Select a topic:</label>
+        <select name="topic" id="topic">
+            <option value="operating_systems">Operating Systems</option>
+            <option value="dbms">OOPS</option>
+            <option value="javascript">JavaScript</option>
+        </select>
+        <button type="submit">Get Questions</button>
+    </form>
+</body>
+</html>

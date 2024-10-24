@@ -210,7 +210,7 @@ def recognize_speech():
 
     with mic as source:
         print("Please answer the question:")
-        recognizer.adjust_for_ambient_noise(source, timeout=7)
+        recognizer.adjust_for_ambient_noise(source)
         audio = recognizer.listen(source)
 
     try:
@@ -274,42 +274,37 @@ def generate_questions(user):
 
         {summarized_content}
 
-        Generate four interview questions that can be asked to the candidate, along with the expected answers based on the candidate's field of knowledge and experience.
+        Generate four interview questions that can be asked to the candidate, along with the expected answers based on the candidate's field of knowledge and experience.Format the response as:
+        1.Question: 
+        Expected Answer:
+
+        2.Question:
+        Expected Answer: 
+        ...
         """
 
         llm_chain = LLMChain(llm=llm, prompt=PromptTemplate(template=prompt, input_variables=[]))
         
-        try:
-            response = llm_chain.invoke({})
-            questions_text = response["text"]
-            print("GENERATED CONTENT:", questions_text, "\n")
-            
-        except Exception as api_error:
-            if "429" in str(api_error):  # Check for rate limit (HTTP 429)
-                raise Exception("Rate limit reached. Please try again later.")
-            else:
-                raise Exception(f"An API error occurred: {api_error}")
+        response = llm_chain.invoke({})
 
-        # Split based on question pattern
+        print(f"Full LLM Response: {response}")
+
+        questions_text = response["text"]  
+
+        print("GEBERATED CONTENT : ",questions_text,"\n")
+
         questions_and_answers = re.split(r'(\d+\.\sQuestion:)', questions_text.strip())
-        
-        # Combine question parts with their respective answers
+        print("QUESTIONS AND ANSWERS SPLIT : ",questions_and_answers,"\n")
         combined = []
         for i in range(1, len(questions_and_answers), 2):
-            question = questions_and_answers[i] + questions_and_answers[i + 1]
-            # Find the answer that follows the question
-            answer_start_index = question.index('Answer:') if 'Answer:' in question else -1
-            if answer_start_index != -1:
-                answer = question[answer_start_index:].strip()
-                question = question[:answer_start_index].strip()
-                combined.append((question, answer))
+            combined.append(questions_and_answers[i] + questions_and_answers[i + 1])
 
         # Extract questions and answers from combined text
-        questions = [qa[0] for qa in combined]
-        answers = [qa[1] for qa in combined]
-
-        print("QUESTIONS:", questions, "\n")
-        print("ANSWERS:", answers, "\n")
+        questions = [qa.split("Expected Answer:")[0].strip() for qa in combined]
+        answers = [qa.split("Expected Answer:")[1].strip() for qa in combined]
+        
+        print("QUESTIONS : ",questions,"\n")
+        print("ANSWERS : ",answers,"\n")
 
         return questions, answers
     
