@@ -1,21 +1,137 @@
+{% include 'navbar.html' %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Interview Questions Scraper</title>
+    <title>Interview Quiz</title>
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    {% load static %}
+    <style>
+        body {
+            background-color: #343a40; 
+            color: #ffffff; 
+            font-family: Arial, sans-serif;
+            height: 100vh; 
+            margin: 0;
+        }
+        h1 {
+            color: #ffc107; 
+            margin-bottom: 20px; 
+            margin-left: 35%;
+            margin-top: 5%;
+        }
+
+        #quiz-container {
+            background-color: #444; 
+            border-radius: 10px; 
+            padding: 40px; 
+            max-width: 400px; 
+            width: 100%;
+            text-align: center; 
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5); 
+            margin-left: 35%;
+            margin-top: 4%;
+        }
+
+        h3 {
+            margin-bottom: 20px; 
+        }
+
+        input[type="text"] {
+            width: calc(100% - 20px); 
+            padding: 10px; 
+            border-radius: 5px; 
+            border: 1px solid #ffc107; 
+            background-color: #343a40; 
+            color: #ffffff; 
+            margin-bottom: 20px; 
+        }
+
+        button {
+            background-color: #ffc107; 
+            color: #343a40; 
+            padding: 12px; 
+            border: none; 
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 1.1em; 
+            transition: background-color 0.3s; 
+        }
+
+        button:hover {
+            background-color: #e0a800;
+        }
+
+        #result {
+            margin-top: 20px; 
+        }
+
+        #user-answer {
+            display: none; 
+        }
+    </style>
 </head>
 <body>
-    <h1>Scrape Interview Questions</h1>
-    <form action="{% url 'scrape_questions' %}" method="post">
-        {% csrf_token %}
-        <label for="topic">Select a topic:</label>
-        <select name="topic" id="topic">
-            <option value="operating_systems">Operating Systems</option>
-            <option value="dbms">OOPS</option>
-            <option value="javascript">JavaScript</option>
-        </select>
-        <button type="submit">Get Questions</button>
-    </form>
+    <h1>Practice Questions</h1>
+    <div id="quiz-container">
+        <h3 id="question"></h3>
+        <input type="text" id="user-answer" placeholder="Your answer here">
+        <button id="submit-answer">Submit Answer</button>
+        <div id="result"></div>
+        <button id="next-question" style="display: none;">Next Question</button>
+    </div>
+
+    <script>
+        
+        const qaPairs = JSON.parse('{{ qa_pairs|escapejs }}'); 
+
+        let currentQuestionIndex = 0;
+
+        $(document).ready(function() {
+            displayQuestion();
+
+            $('#submit-answer').click(function() {
+                const userAnswer = $('#user-answer').val();
+                const csrfToken = '{{ csrf_token }}';  
+                $.post("{% url 'skill_qs' %}", { 
+                    user_answer: userAnswer, 
+                    question_index: currentQuestionIndex,
+                    csrfmiddlewaretoken: csrfToken  
+                }, function(response) {
+                    let resultText = `Similarity: ${response.similarity.toFixed(2)}<br>`;
+                    if (response.is_correct) {
+                        resultText += "Your answer seems correct!<br>";
+                    } else {
+                        resultText += `Your answer seems incorrect. Correct answer was: ${response.correct_answer}<br>`;
+                    }
+                    $('#result').html(resultText);
+                    $('#user-answer').hide(); 
+                    $('#submit-answer').hide(); 
+                    $('#next-question').show(); 
+                });
+            });
+
+            $('#next-question').click(function() {
+                currentQuestionIndex++;
+                if (currentQuestionIndex < qaPairs.length) {
+                    displayQuestion();
+                    $('#result').html(''); 
+                    $('#user-answer').show(); 
+                    $('#submit-answer').show();
+                    $('#next-question').hide(); 
+                } else {
+                    $('#quiz-container').html("<h3>Thank you for participating!</h3>");
+                }
+            });
+        });
+
+        function displayQuestion() {
+            if (currentQuestionIndex < qaPairs.length) {
+                $('#question').text(`Question ${currentQuestionIndex + 1}: ${qaPairs[currentQuestionIndex].Question}`);
+                $('#user-answer').val('').show(); 
+            }
+        }
+    </script>
 </body>
 </html>

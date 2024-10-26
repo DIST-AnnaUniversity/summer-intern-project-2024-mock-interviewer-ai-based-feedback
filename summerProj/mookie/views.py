@@ -10,20 +10,26 @@ from .forms import ResumeUploadForm
 from langchain_huggingface import HuggingFaceEndpoint
 from langchain.chains import LLMChain
 from langchain.prompts import PromptTemplate
-from bs4 import BeautifulSoup
 import os
+from bs4 import BeautifulSoup
 import requests
 import speech_recognition as sr
-from transformers import BertTokenizer, BertModel
-from sklearn.metrics.pairwise import cosine_similarity
 from django.http import JsonResponse
 import time
 from django.views.decorators.csrf import csrf_exempt
 import json
 import re
 from fer import FER
-import torch
 import numpy as np 
+#import wave
+import subprocess
+#import parselmouth
+#from parselmouth.praat import call
+#import io
+
+emotions=[]
+eye_moves= {'left':0,'right':0}
+MOVEMENT_THRESHOLD = 10
 
 @csrf_exempt
 def update_question_index(request):
@@ -40,7 +46,7 @@ def upload_resume(request):
         return redirect('home')
     
     try:
-        resume = Resume.objects.get(user=request.user)  
+        resume = Resume.objects.get(user=request.user)  # Get the existing resume if it exists
         has_uploaded = True
     except Resume.DoesNotExist:
         resume = None
@@ -52,7 +58,7 @@ def upload_resume(request):
             resume = form.save(commit=False)
             resume.user = request.user
 
-            
+            # Extract text from the uploaded PDF
             reader = PdfReader(resume.resume_file)
             text = ""
             for page in reader.pages:
@@ -60,18 +66,28 @@ def upload_resume(request):
             resume.extracted_text = text
             resume.custom_save()
             messages.success(request, 'Your resume was uploaded successfully!')
-            return redirect('home')  
+            return redirect('home')  # Redirect to a success page or profile view
     else:
         form = ResumeUploadForm(instance=resume)
 
     return render(request, 'upload_resume.html', {'form': form, 'has_uploaded': has_uploaded})
 
 def home(request):
+    print("home in views")
     questions = [] 
 
+    # Set session variables only if not already set
+    #if 'isSubjectWise' not in request.session:
+        #request.session['isSubjectWise'] = False
+    #if 'selected_topic' not in request.session:
+    #    request.session['selected_topic'] = "javascript"
+    
+    #print("Session Variables:", request.session.get('isSubjectWise'), request.session.get('selected_topic'))
+
     if request.method == 'POST':
-        username = request.POST['username']
-        password = request.POST['password']
+        username = request.POST.get('username')
+        password = request.POST.get('password')
+        
         user = authenticate(request, username=username, password=password)
         
         if user is not None:
@@ -79,13 +95,14 @@ def home(request):
             messages.success(request, "Logged In")
            
             try:
-                
-                questions,answers = generate_questions(user)
-                request.session['answers']=answers
+                print("RESUME QUESTIONS")
+                questions, answers = generate_questions(user)
+                request.session['answers'] = answers
             except Resume.DoesNotExist:
                 messages.error(request, "No resume found for this user.")
             except Exception as e:
-                messages.error(request, f"An error occurred: {str(e)}") 
+                print(f"Error: {e}")  # Log the error for debugging
+                messages.error(request, f"An error occurred: {str(e)}")
             
             return render(request, 'home.html', {'questions': questions})
         else: 
@@ -93,34 +110,21 @@ def home(request):
             return redirect('home')
     
     return render(request, 'home.html', {'questions': questions})
-    
+
 def logout_user(request):
     logout(request)
     messages.success(request,"Logged out")
     return redirect('home')
 
-
-left_eye_moves = 0
-right_eye_moves = 0
-emotions = []
-MOVEMENT_THRESHOLD = 7
-
 def face_detection():
-    global left_eye_moves  
-    global right_eye_moves
-    global emotions  
-
     detector = dlib.get_frontal_face_detector()
+
     predictor = dlib.shape_predictor("C:/Users/abharna shree m/Downloads/shape_predictor_68_face_landmarks.dat")
     LEFT_EYE = list(range(36, 42))
-    RIGHT_EYE = list(range(42, 48))
+    RIGHT_EYE = list(range(42,48))
     prev_left_eye_center = None
     prev_right_eye_center = None
     emotion_detector = FER(mtcnn=True)
-
-    last_left_move_time = 0
-    last_right_move_time = 0
-    TIME_THRESHOLD = 1.5  
 
     cap = cv2.VideoCapture(0)
 
@@ -128,54 +132,49 @@ def face_detection():
         ret, frame = cap.read()
         frame = cv2.resize(frame, (320, 240)) 
 
+        frame_width= frame.shape[1]
+    
         if not ret or frame is None or frame.size == 0:
             print("Frame not captured correctly")
             break
         
-     
         result = emotion_detector.detect_emotions(frame)
         if result:
-            ep = result[0]['emotions']
-            maxe = max(ep, key=ep.get)
+            ep=result[0]['emotions']
+            maxe=max(ep, key=ep.get)
+            #print(f"Emotion detected: {maxe}")
             emotions.append(maxe)
-
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        faces = detector(gray, 1)
 
+        faces = detector(gray,1)
         for face in faces:
             landmarks = predictor(gray, face)
-            landmarks = np.array([[p.x, p.y] for p in landmarks.parts()])
+            landmarks = np.array([[p.x,p.y] for p in landmarks.parts()])
 
             left_eye = landmarks[LEFT_EYE]
-            right_eye = landmarks[RIGHT_EYE]
+            right_eye =landmarks[RIGHT_EYE]
 
             left_eye_center = np.mean(left_eye, axis=0)
             right_eye_center = np.mean(right_eye, axis=0)
 
-            current_time = time.time() 
             if prev_left_eye_center is not None and prev_right_eye_center is not None:
                 left_eye_movement = np.abs(left_eye_center[0] - prev_left_eye_center[0])
                 right_eye_movement = np.abs(right_eye_center[0] - prev_right_eye_center[0])
 
-                if left_eye_movement > MOVEMENT_THRESHOLD and current_time - last_left_move_time > TIME_THRESHOLD:
+                if left_eye_movement > MOVEMENT_THRESHOLD:
                     if left_eye_center[0] < prev_left_eye_center[0]:
-                        left_eye_moves += 1
+                        eye_moves['left'] += 1
                     else:
-                        right_eye_moves += 1
-                    last_left_move_time = current_time  
+                        eye_moves['right'] += 1
 
-                if right_eye_movement > MOVEMENT_THRESHOLD and current_time - last_right_move_time > TIME_THRESHOLD:
+                if right_eye_movement > MOVEMENT_THRESHOLD:
                     if right_eye_center[0] < prev_right_eye_center[0]:
-                        left_eye_moves += 1
+                        eye_moves['left'] += 1
                     else:
-                        right_eye_moves += 1
-                    last_right_move_time = current_time 
-
+                        eye_moves['right'] += 1
             prev_left_eye_center = left_eye_center
             prev_right_eye_center = right_eye_center
-
-       
-        print(f"Eye moves left: {left_eye_moves}, Eye moves right: {right_eye_moves}")
+        #print(f"Eye moves left: {eye_moves['left']}, Eye moves right: {eye_moves['right']}")
 
         _, jpeg = cv2.imencode('.jpg', frame)
         frame = jpeg.tobytes()
@@ -184,15 +183,17 @@ def face_detection():
 
     cap.release()
 
+
 def video_feed(request):
-    """Streaming the live video feed."""
     return StreamingHttpResponse(face_detection(), content_type='multipart/x-mixed-replace; boundary=frame')
 
 def video_results(request):
-    """Return the eye movement and emotion results as JSON."""
-    eye_moved = left_eye_moves + right_eye_moves 
-    print("EYE MOVED-",{eye_moved})
+    print("\n INSIDE VIDEO RESULTS \n")
+    eye_moved = eye_moves.get('left', 0) + eye_moves.get('right', 0)
     most_common_emotion = max(set(emotions), key=emotions.count) if emotions else "No emotion detected"
+    
+    print("VIDEO RESULTS : eye moved - ",eye_moved,"most common emotion - ",most_common_emotion)
+
     return JsonResponse({
         'eye_moved': eye_moved,
         'most_common_emotion': most_common_emotion
@@ -202,12 +203,13 @@ def summarize_content(content):
     api_url = "https://api-inference.huggingface.co/models/facebook/bart-large-cnn"
     headers = {"Authorization": f"Bearer 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"}
     
+    # Directly use the content to summarize, without including the prompt in the request
     payload = {"inputs": content}
     
     response = requests.post(api_url, headers=headers, json=payload)
     summary = response.json()
     
-  
+    # Extract the summarized text
     summarized_text = summary[0]['summary_text'] if 'summary_text' in summary[0] else "Summary could not be generated."
     print("summary", summarized_text)
     
@@ -220,7 +222,7 @@ def recognize_speech():
 
     with mic as source:
         print("Please answer the question:")
-        recognizer.adjust_for_ambient_noise(source)
+        recognizer.adjust_for_ambient_noise(source, timeout=7)
         audio = recognizer.listen(source)
 
     try:
@@ -241,7 +243,7 @@ def get_similarity(text1, text2):
     payload = {
         "inputs": {
             "source_sentence": text1,
-            "sentences": [text2] 
+            "sentences": [text2]  # Pass text2 as a single-element list
         }
     }
 
@@ -254,13 +256,13 @@ def get_similarity(text1, text2):
         if response.status_code == 200:
             data = response.json()
             if data and isinstance(data, list) and len(data) > 0:
-                similarity_score = data[0] 
-                return similarity_score * 100  
+                similarity_score = data[0]  # The similarity score for text2
+                return similarity_score * 100  # Convert to percentage
         elif response.status_code == 503:
             data = response.json()
-            estimated_time = data.get("estimated_time", 10)  
+            estimated_time = data.get("estimated_time", 10)  # Default to 10 seconds if not provided
             print(f"Model is still loading. Waiting for {estimated_time} seconds...")
-            time.sleep(estimated_time) 
+            time.sleep(estimated_time)  # Wait for the estimated time
         else:
             raise Exception(f"Failed to get response from API. Status code: {response.status_code}, Response: {response.text}")
     
@@ -284,31 +286,42 @@ def generate_questions(user):
 
         {summarized_content}
 
-        Generate FOUR interview questions that can be asked to the candidate, along with the expected answers based on the candidate's field of knowledge and experience.
+        Generate four interview questions that can be asked to the candidate, along with the expected answers based on the candidate's field of knowledge and experience.
         """
 
         llm_chain = LLMChain(llm=llm, prompt=PromptTemplate(template=prompt, input_variables=[]))
         
-        response = llm_chain.invoke({})
+        try:
+            response = llm_chain.invoke({})
+            questions_text = response["text"]
+            print("GENERATED CONTENT:", questions_text, "\n")
+            
+        except Exception as api_error:
+            if "429" in str(api_error):  # Check for rate limit (HTTP 429)
+                raise Exception("Rate limit reached. Please try again later.")
+            else:
+                raise Exception(f"An API error occurred: {api_error}")
 
-        print(f"Full LLM Response: {response}")
-
-        questions_text = response["text"]  
-
-        print("GEBERATED CONTENT : ",questions_text,"\n")
-
+        # Split based on question pattern
         questions_and_answers = re.split(r'(\d+\.\sQuestion:)', questions_text.strip())
-        print("QUESTIONS AND ANSWERS SPLIT : ",questions_and_answers,"\n")
+        
+        # Combine question parts with their respective answers
         combined = []
         for i in range(1, len(questions_and_answers), 2):
-            combined.append(questions_and_answers[i] + questions_and_answers[i + 1])
+            question = questions_and_answers[i] + questions_and_answers[i + 1]
+            # Find the answer that follows the question
+            answer_start_index = question.index('Answer:') if 'Answer:' in question else -1
+            if answer_start_index != -1:
+                answer = question[answer_start_index:].strip()
+                question = question[:answer_start_index].strip()
+                combined.append((question, answer))
 
-       
-        questions = [qa.split("Expected Answer:")[0].strip() for qa in combined]
-        answers = [qa.split("Expected Answer:")[1].strip() for qa in combined]
-        
-        print("QUESTIONS : ",questions,"\n")
-        print("ANSWERS : ",answers,"\n")
+        # Extract questions and answers from combined text
+        questions = [qa[0] for qa in combined]
+        answers = [qa[1] for qa in combined]
+
+        print("QUESTIONS:", questions, "\n")
+        print("ANSWERS:", answers, "\n")
 
         return questions, answers
     
@@ -345,98 +358,65 @@ def interview_process(request):
         'percentage': percentage,
     })
 
+
+def Skill_Streams(request):
+    if request.method == "POST":
+        # Set session variables
+        request.session['isSubjectWise'] = True
+        selected_topic = request.POST.get('topic')
+        request.session['selected_topic'] = selected_topic  # Store the selected topic in the session
+
+        # Redirect to home page after selection
+        return redirect('home')  # Redirect to the 'home' URL
+
+    return render(request, "Skill_Streams.html")
+
 def get_questions_answers(topic):
-    topic_urls = {
-        'operating_systems': 'https://www.interviewbit.com/operating-system-interview-questions/',
-        'oops': 'https://www.interviewbit.com/oops-interview-questions/',
-        'javascript': 'https://www.interviewbit.com/javascript-interview-questions/'
+    urls = {
+        "operating_systems": 'https://www.interviewbit.com/operating-system-interview-questions/',
+        "oops": 'https://www.interviewbit.com/oops-interview-questions/',
+        "javascript": 'https://www.interviewbit.com/javascript-interview-questions/'
     }
 
-    url = topic_urls.get(topic, 'https://www.interviewbit.com/javascript-interview-questions/')  
+    url = urls.get(topic)
+
     r = requests.get(url)
-    
     if r.status_code != 200:
         print(f"Failed to retrieve content. Status code: {r.status_code}")
         return []
 
     soup = BeautifulSoup(r.content, 'html.parser')
+
     questions = soup.find_all('h3')
 
-    qa_pairs = []
+    question_list = []
+    answer_list = []
+
     for question in questions:
         question_text = question.get_text(strip=True)
+
         if "code" in question_text.lower() or "download" in question_text.lower():
             continue
 
         answers = question.find_all_next('p')
         answer_texts = [ans.get_text(strip=True) for ans in answers if ans.get_text(strip=True)]
-        
+
         if answer_texts:
-            full_answer = " ".join(answer_texts[:3])  
-            qa_pairs.append({"Question": question_text, "Answer": full_answer})
+            full_answer = " ".join(answer_texts[:3]) 
+            question_list.append(question_text)
+            answer_list.append(full_answer)
 
-    return qa_pairs
+    print("QUESTIONS:", question_list, "\n")
+    print("ANSWERS:", answer_list, "\n")
 
+    return question_list, answer_list
 
-def calculate_similarity(user_answer, correct_answer):
-    tokenizer = BertTokenizer.from_pretrained('bert-base-uncased')
-    model = BertModel.from_pretrained('bert-base-uncased')
-    inputs = tokenizer([user_answer, correct_answer], return_tensors='pt', padding=True, truncation=True)
-
-    with torch.no_grad():
-        user_embedding = model(**inputs)[0][0][0].numpy() 
-        correct_embedding = model(**inputs)[0][1][0].numpy()
-
-    cosine_sim = cosine_similarity([user_embedding], [correct_embedding])
-    return float(cosine_sim[0][0])
-
-
-def Skill_Streams(request):
-    return render(request, 'options.html')
-
-
-def skill_qs(request):
+@csrf_exempt  # Allow CSRF exempt for testing, remove in production
+def scrape_questions(request):
     if request.method == 'POST':
-     
-        if 'user_answer' in request.POST:
-            
-            selected_topic = request.POST.get('topic', 'javascript')
-            print("JUST BEFORE GET QUESTION ANSWERS")
-            qa_pairs = get_questions_answers(selected_topic)
+        selected_topic = request.POST.get('topic')
+        qa_pairs = get_questions_answers(selected_topic)
 
-           
-            user_answer = request.POST.get('user_answer', '')
-            print(user_answer)
-            question_index = int(request.POST.get('question_index', 0))
+        return render(request, 'results.html', {'qa_pairs': qa_pairs})
 
-            if question_index < len(qa_pairs):
-               
-                similarity = calculate_similarity(user_answer, qa_pairs[question_index]['Answer'])
-                is_correct = similarity >= 0.7
-
-              
-                result = {
-                    "question": qa_pairs[question_index]['Question'],
-                    "similarity": similarity,
-                    "is_correct": is_correct,
-                    "correct_answer": qa_pairs[question_index]['Answer'],
-                    "next_question_index": question_index + 1, 
-                }
-                return JsonResponse(result)  
-
-      
-        else:
-           
-            selected_topic = request.POST.get('topic', 'javascript')  
-            qa_pairs = get_questions_answers(selected_topic)
-            context = {'qa_pairs': json.dumps(qa_pairs), 'selected_topic': selected_topic}
-            return render(request, 'Skill_Streams.html', context)
-
-    else:
-       
-        selected_topic = request.GET.get('topic', 'javascript')
-        qa_pairs = get_questions_answers(selected_topic) 
-
-    
-    context = {'qa_pairs': json.dumps(qa_pairs), 'selected_topic': selected_topic}
-    return render(request, 'Skill_Streams.html', context)
+    return render(request, 'index.html')  # Render the selection form again if not a POST request

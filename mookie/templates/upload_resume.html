@@ -1,11 +1,75 @@
-{% extends 'base.html' %} 
-{% block content %} 
-  <h2>Upload Resume</h2>
-  <form method="post" enctype="multipart/form-data">
-    {% csrf_token %}
-    {{ form.as_p }}
-    <button type="submit">{% if has_uploaded %}Update{% else %}Upload{% endif %}</button>
-  </form>
+{% extends 'base.html' %}
+
+{% load static %}
+
+{% block content %}
+  <style>
+    .form-container {
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+      background-color: #2a2a2a; 
+      border-radius: 8px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2); 
+    }
+    body{
+      background-color: black;
+    }
+   
+    h2 {
+      color: #ffd700;
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    form {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .form-control {
+      background-color: #333; /
+      color: #fff; 
+      border: 1px solid #444; /* Dark border color */
+      border-radius: 4px;
+      padding: 10px;
+      margin-bottom: 15px; /* Space between fields */
+    }
+
+    .form-control::placeholder {
+      color: #888; /* Placeholder text color */
+    }
+
+    .form-control:focus {
+      border-color: #ffd700; /* Golden border on focus */
+      outline: none;
+    }
+
+    /* Style for the submit button */
+    button {
+      background-color: #28a745; /* Green background color */
+      color: #fff; /* White text color */
+      border: none;
+      padding: 10px 15px;
+      border-radius: 4px;
+      font-size: 16px;
+      cursor: pointer;
+      transition: background-color 0.3s ease;
+    }
+
+    button:hover {
+      background-color: #218838; /* Darker green on hover */
+    }
+  </style>
+
+  <div class="form-container">
+    <h2>Upload Resume</h2>
+    <form method="post" enctype="multipart/form-data">
+      {% csrf_token %}
+      {{ form.as_p }}
+      <button type="submit">{% if has_uploaded %}Update{% else %}Upload{% endif %}</button>
+    </form>
+  </div>
 {% endblock %}
 
 
